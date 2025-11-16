@@ -1,0 +1,179 @@
+# =============================================================================
+# AI-Enhanced Video Meeting PoC - Git Ignore
+# =============================================================================
+
+# Environment variables (NEVER commit these!)
+.env
+.env.*
+!.env.example
+.env.secrets
+
+# Secrets and credentials
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+credentials/
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# =============================================================================
+# Node.js / Frontend
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# =============================================================================
+# Docker
+# =============================================================================
+docker-compose.override.yml
+.dockerignore
+
+# =============================================================================
+# Database
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+pgdata/
+
+# Database backups
+*.sql.gz
+*.dump
+backups/
+
+# =============================================================================
+# Logs
+# =============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# =============================================================================
+# OS
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# =============================================================================
+# SSL Certificates
+# =============================================================================
+*.crt
+*.key
+*.pem
+ssl/
+certs/
+letsencrypt/
+
+# =============================================================================
+# Temporary files
+# =============================================================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# =============================================================================
+# AI Model cache
+# =============================================================================
+models/
+*.pt
+*.pth
+*.onnx
+.cache/
+whisper_cache/
+
+# =============================================================================
+# Testing
+# =============================================================================
+coverage/
+.coverage
+.coverage.*
+.hypothesis/
+.tox/
+
+# =============================================================================
+# Project-specific
+# =============================================================================
+# Recorded meetings (if recording feature is added)
+recordings/
+uploads/
+
+# User-generated content
+media/
+static/user_uploads/

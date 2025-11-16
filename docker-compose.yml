@@ -1,0 +1,227 @@
+version: '3.9'
+
+services:
+  # =============================================================================
+  # PostgreSQL Database
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-meeting-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-meeting_ai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend_network
+
+  # =============================================================================
+  # Redis (Message Broker & Cache)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ai-meeting-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend_network
+
+  # =============================================================================
+  # LiveKit SFU Server
+  # =============================================================================
+  livekit:
+    image: livekit/livekit-server:v1.7
+    container_name: ai-meeting-livekit
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml
+    ports:
+      - "${LIVEKIT_PORT:-7880}:7880"      # WebSocket (client connections)
+      - "${LIVEKIT_PORT_HTTP:-7881}:7881" # HTTP API (server SDK)
+      - "7882:7882/udp"                    # WebRTC/UDP
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?LIVEKIT_API_KEY must be set}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET must be set}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7881"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - backend_network
+      - frontend_network
+
+  # =============================================================================
+  # STT Service (WhisperLive)
+  # =============================================================================
+  stt:
+    build:
+      context: ./stt
+      dockerfile: Dockerfile
+    container_name: ai-meeting-stt
+    environment:
+      MODEL_SIZE: ${STT_MODEL:-large-v3}
+      LANGUAGE: ${STT_LANGUAGE:-en}
+      BACKEND: ${STT_BACKEND:-faster_whisper}
+      DEVICE: ${STT_DEVICE:-cpu}
+      COMPUTE_TYPE: ${STT_COMPUTE_TYPE:-int8}
+    ports:
+      - "${STT_PORT:-9090}:9090"
+    volumes:
+      - stt_models:/root/.cache/whisper
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 9090)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend_network
+
+  # =============================================================================
+  # Backend (FastAPI)
+  # =============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-meeting-backend
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-meeting_ai}
+      # Redis
+      REDIS_URL: redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/0
+      # LiveKit
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_URL: http://livekit:7881
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      # STT
+      STT_URL: ws://stt:9090
+      STT_ENGINE_TYPE: ${STT_ENGINE_TYPE:-whisperlive}
+      # LLM
+      LLM_API_BASE_URL: ${LLM_API_BASE_URL:-https://platform.moonshot.ai/v1}
+      LLM_API_KEY: ${LLM_API_KEY:?LLM_API_KEY must be set}
+      LLM_MODEL: ${LLM_MODEL:-kimi-k2-instruct}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2000}
+      LLM_MIN_REQUEST_INTERVAL: ${LLM_MIN_REQUEST_INTERVAL:-5}
+      # Security
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-1440}
+      PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-8}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      # App Config
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+      stt:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - backend_network
+
+  # =============================================================================
+  # Frontend (React + Vite)
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
+        VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-ws://localhost:7880}
+    container_name: ai-meeting-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - frontend_network
+
+  # =============================================================================
+  # Nginx Reverse Proxy (Production)
+  # =============================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: ai-meeting-nginx
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "${NGINX_PORT_HTTP:-80}:80"
+      - "${NGINX_PORT_HTTPS:-443}:443"
+    depends_on:
+      - frontend
+      - backend
+      - livekit
+    networks:
+      - frontend_network
+      - backend_network
+    profiles:
+      - production
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  backend_network:
+    driver: bridge
+  frontend_network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+  redis_data:
+  stt_models:
