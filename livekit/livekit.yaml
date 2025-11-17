@@ -1,0 +1,45 @@
+# LiveKit Server Configuration
+
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  # UDP port range for WebRTC
+  port_range_start: 50000
+  port_range_end: 60000
+  # Use mDNS for ICE candidates (for local development)
+  use_external_ip: false
+  # ICE servers (STUN/TURN) - empty for local development
+  ice_servers: []
+
+# API key and secret (from environment)
+keys:
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+
+# Logging
+logging:
+  level: info
+  # Use JSON format for structured logging
+  json: false
+
+# Room settings
+room:
+  # Auto create rooms when participants join
+  auto_create: true
+  # Maximum participants per room (0 = unlimited)
+  max_participants: 10
+  # Empty room timeout (minutes)
+  empty_timeout: 5
+  # Departure timeout (seconds)
+  departure_timeout: 20
+
+# Turn off webhook for now
+# webhook:
+#   urls:
+#     - http://backend:8000/api/webhooks/livekit
+
+# Redis for multi-node setups (optional, commented for single-node)
+# redis:
+#   address: redis:6379
+#   db: 0
