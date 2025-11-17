@@ -40,11 +40,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         @app.get("/items")
         async def read_items(db: AsyncSession = Depends(get_db)):
             ...
+
+    Note: Services must explicitly call await db.commit() or await db.rollback()
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            # No auto-commit - let services handle commits explicitly
         except Exception:
             await session.rollback()
             raise

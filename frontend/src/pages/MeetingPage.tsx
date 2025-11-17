@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { LiveKitRoom, VideoConference } from '@livekit/components-react'
-import '@livekit/components-styles'
+import '@livekit/components-styles/dist/index.css'
 import { useAuthStore } from '../stores/authStore'
 import { roomsAPI } from '../services/api'
 import { config } from '../config'

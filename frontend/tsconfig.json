@@ -18,7 +18,7 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthrough ThoughCase": true,
+    "noFallthroughCasesInSwitch": true,
 
     /* Path aliases */
     "baseUrl": ".",
